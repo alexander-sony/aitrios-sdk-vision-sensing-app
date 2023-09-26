@@ -2,7 +2,10 @@
 based on code from
 https://github.com/SonySemiconductorSolutions/aitrios-sdk-vision-sensing-app/blob/main/samples/zone_detection/sdk_in_a_day.ipynb
 
-__docker training crashes senor0lunlx0173__
+__docker training crashes senor0lunlx0173__, see instead nvidia@senor0lunlx0163:~/github/aitrios-sdk-vision-sensing-app
+
+Build docker image with
+build_docker.sh
 
 Used venv based on python 3.10
 install requirements using samples/zone_detection/requirements.txt
