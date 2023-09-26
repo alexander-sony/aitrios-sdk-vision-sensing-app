@@ -1,3 +1,6 @@
+venv/
+samples/zone_detection/work/dataset
+
 # python
 __pycache__/
 .ipynb_checkpoints/
