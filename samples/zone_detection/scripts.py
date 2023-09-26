@@ -2,7 +2,7 @@
 based on code from
 https://github.com/SonySemiconductorSolutions/aitrios-sdk-vision-sensing-app/blob/main/samples/zone_detection/sdk_in_a_day.ipynb
 
-__docker training crashes senor0lunlx0173__, see instead nvidia@senor0lunlx0163:~/github/aitrios-sdk-vision-sensing-app
+__docker training crashes senor0lunlx0173__, see instead nvidia@senor0lunlx0163:~/Projects/alex/od-transfer-learning
 
 Build docker image with
 build_docker.sh
@@ -227,23 +227,45 @@ def evaluate_tflite():
         MODEL, image, SCORE_THRESHOLD, DNN_OUTPUT_DETECTIONS
     )
 
-def transfer_learning():
-    NUM_TRAIN_STEPS = 300
+def export_tflite_ssd_graph(training_steps=300):
+    NUM_TRAIN_STEPS = training_steps
     PIPELINE_CONFIG_PATH = f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/pipeline.config"
-    MODEL_DIR = f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/out/train"
-    SAMPLE_1_OF_N_EVAL_EXAMPLES = 100
-    run_shell_command(
-        f"docker run --rm -t -v $(pwd):{TRAINING_DOCKER_VOLUME_DIR} \
-            --network host {TRAINING_DOCKER_IMAGE_NAME} \
-            python /tensorflow/models/research/object_detection/model_main.py \
-            --pipeline_config_path={PIPELINE_CONFIG_PATH} \
-            --model_dir={MODEL_DIR} \
-            --num_train_steps={NUM_TRAIN_STEPS} \
-            --sample_1_of_n_eval_examples={SAMPLE_1_OF_N_EVAL_EXAMPLES} \
-            --alsologtostderr"
+    TRAINED_CHECKPOINT_PREFIX = (
+        f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/out/train/model.ckpt-{NUM_TRAIN_STEPS}"
     )
-    print(f"Learned in ./{MODELS_DIR}/out/train")
+    OUTPUT_DIRECTORY = f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/out/models"
+    run_shell_command(
+        f"docker run --rm -t -v $(pwd):{TRAINING_DOCKER_VOLUME_DIR} {TRAINING_DOCKER_IMAGE_NAME} \
+            python /tensorflow/models/research/object_detection/export_tflite_ssd_graph.py \
+            --pipeline_config_path={PIPELINE_CONFIG_PATH} \
+            --trained_checkpoint_prefix={TRAINED_CHECKPOINT_PREFIX} \
+            --output_directory={OUTPUT_DIRECTORY} \
+            --add_postprocessing_op=true"
+    )
+    print(f"Saved in ./{MODELS_DIR}/out/models") 
 
+def tflite_convert_trained_model():
+    OUTPUT_FILE = (
+        f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/model_quantized_od.tflite"
+    )
+    GRAPH_DEF_FILE = (
+        f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/out/models/tflite_graph.pb"
+    )
+    convert_to_tflite(OUTPUT_FILE, GRAPH_DEF_FILE)
+    print(
+        f"Base AI model TFLite converted in ./{MODELS_DIR}/model_quantized_od.tflite"
+    )
+    convert_to_tflite(OUTPUT_FILE, GRAPH_DEF_FILE)    
+
+def evaluate_trained_tflite():
+    IMAGE_INPUT = f"{IMAGES_VALIDATION_DIR}/training_image_037.jpg"
+    image = cv2.cvtColor(cv2.imread(IMAGE_INPUT), cv2.COLOR_BGR2RGB)
+    image = cv2.resize(image, dsize=(INPUT_SIZE, INPUT_SIZE))    
+    MODEL = f"{MODELS_DIR}/model_quantized_od.tflite"
+    SCORE_THRESHOLD = 0.3
+    output_tensor_device, postprocessed, result_image = evaluate_and_display_tflite(
+        MODEL, image, SCORE_THRESHOLD, DNN_OUTPUT_DETECTIONS
+    )
 
 if __name__ == '__main__':
     #tflite_convert()
@@ -254,4 +276,18 @@ if __name__ == '__main__':
     # l1000323954@senor0lunlx0173:~/github/aitrios-sdk-vision-sensing-app/samples/zone_detection$ cp -r dataset/validation work/dataset/
     # update path in pipeline config to /root/samples/zone_detection/work/dataset/...
     # update fine_tune_checkpoint path
-    transfer_learning()
+
+    # learning is performed on nvidia
+    # Use sshfs to mount zone_detection on nvidia
+    #    see nvidia@senor0lunlx0163:~/Projects/alex/od-transfer-learning
+    # ev change ownership
+    #    sudo chown -R nvidia:nvidia  work/models/out/train/
+
+    # Export AI model as SavedModel
+    # Using docker and ok since only training is crashing the computer
+    #export_tflite_ssd_graph()
+
+    # Convert trained SavedModel to TFLite
+    #tflite_convert_trained_model()
+
+    evaluate_trained_tflite()
