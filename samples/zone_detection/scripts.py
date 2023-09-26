@@ -1,3 +1,13 @@
+'''
+based on code from
+https://github.com/SonySemiconductorSolutions/aitrios-sdk-vision-sensing-app/blob/main/samples/zone_detection/sdk_in_a_day.ipynb
+
+__docker training crashes senor0lunlx0173__
+
+Used venv based on python 3.10
+install requirements using samples/zone_detection/requirements.txt
+'''
+
 #import json
 import subprocess
 from pathlib import Path
@@ -64,19 +74,6 @@ def convert_to_tflite(output_file: str, graph_def_file: str):
         --change_concat_input_ranges=false \
         --allow_nudging_weights_to_use_fast_gemm_kernel=true \
         --allow_custom_ops'
-    '''
-    docker run --rm -t -v $(pwd):/root/samples/zone_detection tf1_od_api_env:1.0.0 \
-        tflite_convert \
-        --output_file=/root/samples/zone_detection//home/l1000323954/github/aitrios-sdk-vision-sensing-app/samples/zone_detection/models/base_model_quantized_od.tflite \
-        --graph_def_file=/root/samples/zone_detection//home/l1000323954/github/aitrios-sdk-vision-sensing-app/samples/zone_detection/models/out/ckpt/tflite_graph.pb \
-        --inference_type=QUANTIZED_UINT8 \
-        --input_arrays="normalized_input_image_tensor" \
-        --output_arrays=TFLite_Detection_PostProcess,TFLite_Detection_PostProcess:1,TFLite_Detection_PostProcess:2,TFLite_Detection_PostProcess:3 \
-        --mean_values=128 --std_dev_values=128 --input_shapes=1,300,300,3 \
-        --change_concat_input_ranges=false \
-        --allow_nudging_weights_to_use_fast_gemm_kernel=true \
-        --allow_custom_ops
-    '''
     print(cmd)
     run_shell_command(cmd)
 
@@ -227,6 +224,31 @@ def evaluate_tflite():
         MODEL, image, SCORE_THRESHOLD, DNN_OUTPUT_DETECTIONS
     )
 
+def transfer_learning():
+    NUM_TRAIN_STEPS = 300
+    PIPELINE_CONFIG_PATH = f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/pipeline.config"
+    MODEL_DIR = f"{TRAINING_DOCKER_VOLUME_DIR}/{MODELS_DIR}/out/train"
+    SAMPLE_1_OF_N_EVAL_EXAMPLES = 100
+    run_shell_command(
+        f"docker run --rm -t -v $(pwd):{TRAINING_DOCKER_VOLUME_DIR} \
+            --network host {TRAINING_DOCKER_IMAGE_NAME} \
+            python /tensorflow/models/research/object_detection/model_main.py \
+            --pipeline_config_path={PIPELINE_CONFIG_PATH} \
+            --model_dir={MODEL_DIR} \
+            --num_train_steps={NUM_TRAIN_STEPS} \
+            --sample_1_of_n_eval_examples={SAMPLE_1_OF_N_EVAL_EXAMPLES} \
+            --alsologtostderr"
+    )
+    print(f"Learned in ./{MODELS_DIR}/out/train")
+
+
 if __name__ == '__main__':
     #tflite_convert()
-    evaluate_tflite()
+    #evaluate_tflite()
+    # Prepare pipeline.config:
+    # l1000323954@senor0lunlx0173:~/github/aitrios-sdk-vision-sensing-app/samples/zone_detection$ cp models/pipeline.config work/models
+    # l1000323954@senor0lunlx0173:~/github/aitrios-sdk-vision-sensing-app/samples/zone_detection$ cp -r dataset/training work/dataset/
+    # l1000323954@senor0lunlx0173:~/github/aitrios-sdk-vision-sensing-app/samples/zone_detection$ cp -r dataset/validation work/dataset/
+    # update path in pipeline config to /root/samples/zone_detection/work/dataset/...
+    # update fine_tune_checkpoint path
+    transfer_learning()
